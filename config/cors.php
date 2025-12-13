@@ -1,19 +1,15 @@
 <?php
 
 return [
-    'paths' => [
-        'api/*',
-        'broadcasting/*',      // برای Echo/Reverb
-        'sanctum/csrf-cookie', // اگر Sanctum کوکی استفاده شود
-    ],
+
+    'paths' => ['api/*', 'sanctum/csrf-cookie', 'login', 'logout'],
 
     'allowed_methods' => ['*'],
 
-    // فقط همون فرانت شما:
-    'allowed_origins' => ['http://localhost:3000'],
-
-    // اگر پورت/اسکیما ممکنه تغییر کنه، می‌تونی به صورت wildcard هم بذاری:
-    // 'allowed_origins' => ['http://localhost:*'],
+    'allowed_origins' => [
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+    ],
 
     'allowed_origins_patterns' => [],
 
@@ -23,7 +19,7 @@ return [
 
     'max_age' => 0,
 
-    // اگر Bearer Token می‌فرستی، نیازی به credentials نیست.
-    // اگر کوکی/سشن می‌خواهی بفرستی، این را true کن و تنظیمات Sanctum را هم انجام بده.
+    // برای JWT معمولاً false هم اوکیه چون کوکی نمی‌خوایم.
+    // ولی اگر بعداً خواستی کوکی هم داشته باشی، true کن.
     'supports_credentials' => false,
 ];

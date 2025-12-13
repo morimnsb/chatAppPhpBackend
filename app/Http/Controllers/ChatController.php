@@ -54,7 +54,7 @@ public function firstMessage(Request $request)
         ]);
     }
 
-    $text = $data['content'] ?? 'Hi!';
+    $text = $data['content'] ?? 'Hi! Controller';
     $msg = \App\Models\Message::create([
         'chat_room_id' => $room->id,
         'user_id'      => $authId,
