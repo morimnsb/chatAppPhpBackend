@@ -4,7 +4,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Events\ChatMessageSent;
+use App\Events\ChatMessageCreated;
 use App\Events\TypingIndicator;
 
 class ChatBroadcastController extends Controller
@@ -22,7 +22,7 @@ class ChatBroadcastController extends Controller
             'ts'        => now()->toISOString(),
         ];
 
-        broadcast(new ChatMessageSent($validated['room_id'], $payload))->toOthers();
+        broadcast(new ChatMessageCreated($validated['room_id'], $payload))->toOthers();
 
         return response()->json(['ok' => true, 'sent' => $payload]);
     }

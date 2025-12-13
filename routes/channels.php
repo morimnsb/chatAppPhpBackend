@@ -2,17 +2,14 @@
 
 use Illuminate\Support\Facades\Broadcast;
 
-// برای پیام‌های روم (private)
-Broadcast::channel('room.{roomId}', function ($user, $roomId) {
-    // اگر مجازسازی خاصی ندارید، موقتاً true
-    return true;
-});
+Broadcast::channel('user.{userId}', function ($user, $userId) {
+    if (! $user) return false;
+    if ((int) $user->id !== (int) $userId) return false;
 
-// برای حضور اعضا (presence)
-Broadcast::channel('presence.room.{roomId}', function ($user, $roomId) {
     return [
-        'id'   => $user->id,
-        'name' => $user->name,
+        'id'    => $user->id,
+        'name'  => $user->name,
+        'email' => $user->email,
     ];
 });
 

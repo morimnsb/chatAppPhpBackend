@@ -3,7 +3,8 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
-
+use App\Listeners\HandleWsMessageReceived;
+use Illuminate\Support\Facades\Event;
 class AppServiceProvider extends ServiceProvider
 {
     /**
@@ -17,8 +18,11 @@ class AppServiceProvider extends ServiceProvider
     /**
      * Bootstrap any application services.
      */
-    public function boot(): void
-    {
-        //
-    }
+public function boot(): void
+{
+    Event::listen(
+        MessageReceived::class,
+        HandleWsMessageReceived::class,
+    );
+}
 }

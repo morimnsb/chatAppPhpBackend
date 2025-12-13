@@ -6,32 +6,27 @@ use Illuminate\Support\Facades\Schema;
 
 class CreateFriendshipsTable extends Migration
 {
-    public function up(): void
-    {
-        Schema::create('friendships', function (Blueprint $table) {
-            $table->id();
+public function up(): void
+{
+    Schema::create('friendships', function (Blueprint $table) {
+        $table->id();
 
-            // جهت اولیه
-            $table->unsignedBigInteger('from_user_id');
-            $table->unsignedBigInteger('to_user_id');
+        $table->foreignId('requester_id')
+              ->constrained('users')
+              ->cascadeOnDelete();
 
-            // زوج canonical برای یکتا کردن
-            $table->unsignedBigInteger('user_low_id');
-            $table->unsignedBigInteger('user_high_id');
+        $table->foreignId('receiver_id')
+              ->constrained('users')
+              ->cascadeOnDelete();
 
-            $table->timestamps();
+        $table->string('status')->default('pending');
 
-            $table->foreign('from_user_id')->references('id')->on('users')->cascadeOnDelete();
-            $table->foreign('to_user_id')->references('id')->on('users')->cascadeOnDelete();
-            $table->foreign('user_low_id')->references('id')->on('users')->cascadeOnDelete();
-            $table->foreign('user_high_id')->references('id')->on('users')->cascadeOnDelete();
+        $table->timestamp('accepted_at')->nullable();
 
-            $table->unique(['user_low_id', 'user_high_id'], 'uniq_friend_pair');
-        });
-    }
+        $table->timestamps();
 
-    public function down(): void
-    {
-        Schema::dropIfExists('friendships');
-    }
+        $table->unique(['requester_id', 'receiver_id']);
+    });
+}
+
 }

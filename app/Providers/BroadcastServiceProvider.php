@@ -12,11 +12,11 @@ class BroadcastServiceProvider extends ServiceProvider
 public function boot(): void
 {
     Broadcast::routes([
-        'prefix' => 'broadcasting',
-        'middleware' => ['api', 'auth:sanctum'], // CORS سراسری است و قبل از این اجرا می‌شود
+        'middleware' => ['auth:sanctum'], // 👈 همون گاردی که برای API استفاده می‌کنی
     ]);
 
     require base_path('routes/channels.php');
 }
+
 
 }

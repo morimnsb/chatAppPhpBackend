@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Events\ChatMessageSent;
+use App\Events\ChatMessageCreated;
 
 class TestBroadcastController extends Controller
 {
@@ -12,7 +12,7 @@ class TestBroadcastController extends Controller
         $text = $request->input('text', 'Hello from server!');
         $senderId = (int) ($request->user()->id ?? 0);
 
-        event(new ChatMessageSent($roomId, [
+        event(new ChatMessageCreated($roomId, [
             'text'      => $text,
             'sender_id' => $senderId,
             'sent_at'   => now()->toISOString(),

@@ -12,13 +12,21 @@ return new class extends Migration
     public function up(): void
 {
     Schema::create('messages', function (Blueprint $table) {
-        $table->id();
-        $table->foreignId('chat_room_id')->constrained('chat_rooms')->onDelete('cascade');
-        $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
-        $table->text('body');
-        $table->timestamp('read_at')->nullable();
-        $table->timestamps();
-    });
+    $table->id();
+
+    $table->foreignId('chat_room_id')
+          ->constrained('chat_rooms')
+          ->cascadeOnDelete();
+
+    $table->foreignId('user_id')
+          ->constrained('users')
+          ->cascadeOnDelete();
+
+    $table->text('content');
+$table->string('kind')->nullable(); // e.g. 'friend_request', 'normal',
+    $table->timestamps();
+});
+
 }
 
 public function down(): void

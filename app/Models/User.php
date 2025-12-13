@@ -55,5 +55,9 @@ public function chatRooms()
     return $this->belongsToMany(\App\Models\ChatRoom::class, 'chat_room_user')
                 ->withTimestamps();
 }
+public function messages()
+{
+    return $this->hasMany(Message::class);
+}
 
 }
