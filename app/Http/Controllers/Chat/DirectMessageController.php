@@ -72,7 +72,8 @@ class DirectMessageController extends Controller
         ]);
 
         // ✅ پخش realtime از طریق Reverb
-        event(new ChatMessageCreated($message));
+        broadcast(new \App\Events\ChatMessageCreated($roomId, $message));
+
 
         // ✅ برگرداندن پاسخ به front
         // اگر Resource داری، می‌تونی از آن استفاده کنی

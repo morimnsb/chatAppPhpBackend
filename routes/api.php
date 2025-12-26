@@ -15,6 +15,11 @@ use App\Models\ChatRoom;
 use App\Models\Message;
 use App\Events\ChatMessageCreated;
 
+use Illuminate\Support\Facades\Broadcast;
+
+Broadcast::routes(['middleware' => ['auth:sanctum']]);
+
+
 // ---- تنظیمات OTP ----
 if (! defined('OTP_TTL_MINUTES')) {
     define('OTP_TTL_MINUTES', 10);
@@ -216,6 +221,125 @@ Route::get('/auth/users', function (Request $request) {
 */
 
 Route::middleware('auth:sanctum')->group(function () {
+// ✅ POST /api/chatMeetUp/friendship
+Route::post('/chatMeetUp/friendship', function (Request $request) {
+    $data = $request->validate([
+        'to_user_id' => ['required', 'integer', 'exists:users,id'],
+        'content'    => ['nullable', 'string'],
+    ]);
+
+    /** @var \App\Models\User $from */
+    $from = $request->user();
+    $to   = User::find($data['to_user_id']);
+
+    if (! $to) {
+        return response()->json(['message' => 'User not found'], 404);
+    }
+
+    if ((int)$from->id === (int)$to->id) {
+        return response()->json(['message' => 'نمی‌توانید خودتان را اضافه کنید.'], 422);
+    }
+
+    // اگر قبلا هست
+    $existing = Friendship::where(function ($q) use ($from, $to) {
+            $q->where('requester_id', $from->id)->where('receiver_id', $to->id);
+        })
+        ->orWhere(function ($q) use ($from, $to) {
+            $q->where('requester_id', $to->id)->where('receiver_id', $from->id);
+        })
+        ->first();
+
+    if ($existing) {
+        return response()->json([
+            'message' => 'درخواست دوستی قبلاً ثبت شده است.',
+            'friendship' => $existing,
+        ], 200);
+    }
+
+    return DB::transaction(function () use ($from, $to, $data) {
+
+        $friendship = Friendship::create([
+            'requester_id' => $from->id,
+            'receiver_id'  => $to->id,
+            'status'       => 'pending',
+        ]);
+
+        // پیدا/ساخت روم خصوصی
+        $existingRoomRow = DB::table('chat_rooms as r')
+            ->join('chat_room_user as cru1', 'cru1.chat_room_id', '=', 'r.id')
+            ->join('chat_room_user as cru2', 'cru2.chat_room_id', '=', 'r.id')
+            ->where('r.is_private', true)
+            ->where('cru1.user_id', $from->id)
+            ->where('cru2.user_id', $to->id)
+            ->select('r.id')
+            ->first();
+
+        if ($existingRoomRow) {
+            $room = ChatRoom::find($existingRoomRow->id);
+        } else {
+            $room = ChatRoom::create([
+                'name'        => null,
+                'description' => null,
+                'is_private'  => true,
+                'private_key' => (string) Str::uuid(),
+            ]);
+            $room->users()->attach([$from->id, $to->id]);
+        }
+
+        // پیام اول
+        $content = trim($data['content'] ?? '') ?: 'سلام! من برایت درخواست دوستی فرستادم 🙌';
+
+        $message = $room->messages()->create([
+            'user_id' => $from->id,
+            'content' => $content,
+            'kind'    => 'friend_request',
+        ]);
+
+        // broadcast (اختیاری)
+        try {
+            event(new ChatMessageCreated($room->id, $message));
+        } catch (\Throwable $e) {
+            Log::error('Broadcast failed (friend_request msg)', [
+                'msg_id' => $message->id,
+                'error'  => $e->getMessage(),
+            ]);
+        }
+
+        return response()->json([
+            'message'    => 'Friend request sent.',
+            'friendship' => $friendship,
+            'room'       => $room->load('users'),
+            'dm_message' => $message,
+        ], 201);
+    });
+});
+
+
+// ✅ POST /api/chatMeetUp/friendship/respond
+Route::post('/chatMeetUp/friendship/respond', function (Request $request) {
+    /** @var \App\Models\User $me */
+    $me = $request->user();
+
+    $data = $request->validate([
+        'friendship_id' => ['required', 'integer', 'exists:friendships,id'],
+        'action'        => ['required', Rule::in(['accept', 'reject'])],
+    ]);
+
+    $friendship = Friendship::findOrFail($data['friendship_id']);
+
+    if ((int)$friendship->receiver_id !== (int)$me->id) {
+        return response()->json(['message' => 'Forbidden'], 403);
+    }
+
+    $friendship->status = $data['action'] === 'accept' ? 'accepted' : 'rejected';
+    $friendship->save();
+
+    return response()->json([
+        'message'        => 'Friend request updated.',
+        'friendship_id'  => $friendship->id,
+        'friendship_raw' => $friendship->status,
+    ]);
+});
 
     // ✅ GET /api/chatMeetUp/chatrooms  (برای اینکه فرانت 500/404 نگیره)
     Route::get('/chatMeetUp/chatrooms', function (Request $request) {
@@ -369,5 +493,20 @@ Route::middleware('auth:sanctum')->group(function () {
         return response()->json(['message' => $message->load('user:id,name,email')], 201);
     });
 
+});
+
+
+Route::middleware('auth:api')->get('/debug/broadcast/{roomId}', function ($roomId) {
+    $roomId = (int) $roomId;
+
+    $m = Message::create([
+        'chat_room_id' => $roomId,
+        'user_id' => auth()->id(), // ✅ بهتر از 1
+        'content' => 'debug broadcast ' . now()->toDateTimeString(),
+    ]);
+
+    broadcast(new ChatMessageCreated($roomId, $m));
+
+    return ['ok' => true, 'roomId' => $roomId, 'messageId' => $m->id];
 });
 

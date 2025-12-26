@@ -1,13 +1,27 @@
-// app/Providers/RouteServiceProvider.php (method: configureRateLimiting)
 <?php
 
-use Illuminate\Cache\RateLimiting\Limit;
-use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Http\Request;
+namespace App\Providers;
 
-RateLimiter::for('chat-actions', function (Request $request) {
-    $key = 'chat:'.$request->user()?->id ?: $request->ip();
-    return [
-        Limit::perMinute(10)->by($key),   // MAX_MESSAGES_PER_WINDOW = 10
-    ];
-});
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Foundation\Support\Providers\RouteServiceProvider as ServiceProvider;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
+
+class RouteServiceProvider extends ServiceProvider
+{
+    protected function configureRateLimiting(): void
+    {
+        // ✅ اگر cache هنوز bind نشده بود، artisan رو نکُش
+        if (!app()->bound('cache.store')) {
+            return;
+        }
+
+        RateLimiter::for('chat-actions', function (Request $request) {
+            $key = 'chat:' . ($request->user()?->id ?? $request->ip());
+
+            return [
+                Limit::perMinute(10)->by($key),
+            ];
+        });
+    }
+}

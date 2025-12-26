@@ -3,92 +3,84 @@
 namespace App\Listeners;
 
 use App\Events\ChatMessageCreated;
+use App\Models\ChatRoom;
 use App\Models\Message;
 use Illuminate\Support\Facades\Log;
-    use App\Models\ChatRoom;
+use Laravel\Reverb\Events\MessageReceived;
+
 class HandleWsMessageReceived
 {
-    public function handle(array $payload): void
+    public function handle(MessageReceived $event): void
     {
-        $event = data_get($payload, 'event');
+        // $event->message معمولاً JSON string هست
+        $payload = json_decode($event->message ?? '', true);
 
-        switch ($event) {
+        if (!is_array($payload)) {
+            Log::warning('WS: invalid JSON payload', ['raw' => $event->message]);
+            return;
+        }
+
+        $eventName = data_get($payload, 'event');
+        $data      = data_get($payload, 'data', []);
+        $channel   = data_get($payload, 'channel'); // مثل chat.1
+
+        Log::debug('WS: MessageReceived', [
+            'event'   => $eventName,
+            'channel' => $channel,
+            'data'    => $data,
+        ]);
+
+        switch ($eventName) {
             case 'ClientChatMessage':
-                $this->handleClientChatMessage($payload);
+                $this->handleClientChatMessage($data, $channel);
                 break;
 
             case 'ClientTyping':
-                $this->handleClientTyping($payload);
+                $this->handleClientTyping($data, $channel);
                 break;
 
             default:
-                Log::debug('HandleWsMessageReceived: unknown event', [
-                    'event'   => $event,
-                    'payload' => $payload,
-                ]);
+                // ping/subscribe/unsubscribe هم اینجا میاد
+                Log::debug('WS: ignored event', ['event' => $eventName]);
         }
     }
 
+    protected function handleClientChatMessage(array $data, ?string $channel): void
+    {
+        $roomId  = (int) data_get($data, 'room_id');
+        $userId  = (int) data_get($data, 'user_id');
+        $content = trim((string) data_get($data, 'content', ''));
 
-protected function handleClientChatMessage(array $payload): void
-{
-    $roomId  = (int) data_get($payload, 'data.room_id');
-    $userId  = (int) data_get($payload, 'data.user_id');
-    $content = trim((string) data_get($payload, 'data.content', ''));
+        if ($roomId <= 0 || $userId <= 0 || $content === '') {
+            Log::warning('WS chat: invalid data', ['data' => $data, 'channel' => $channel]);
+            return;
+        }
 
-    Log::info('WS ClientChatMessage received', [
-        'room_id' => $roomId,
-        'user_id' => $userId,
-        'content' => $content,
-    ]);
-
-    if (!$roomId || !$userId || $content === '') {
-        Log::warning('WS chat: invalid payload', ['payload' => $payload]);
-        return;
-    }
-
-    try {
         $message = Message::create([
             'chat_room_id' => $roomId,
             'user_id'      => $userId,
             'content'      => $content,
         ]);
 
-        Log::info('WS chat: message created', [
-            'id'           => $message->id,
-            'chat_room_id' => $message->chat_room_id,
-        ]);
-
         ChatRoom::whereKey($roomId)->update([
             'last_message_at' => now(),
         ]);
 
-        // ⬇️ این مهمه: همون ایونتی که HTTP استفاده می‌کند
-        event(new ChatMessageCreated($message));
-    } catch (\Throwable $e) {
-        Log::error('WS chat: failed to create message', [
-            'room_id' => $roomId,
-            'user_id' => $userId,
-            'error'   => $e->getMessage(),
-            'trace'   => $e->getTraceAsString(),
+        // ✅ اینجا باید (roomId, message) بدی
+        broadcast(new ChatMessageCreated($roomId, $message));
+
+        Log::info('WS chat: saved & broadcasted', [
+            'message_id' => $message->id,
+            'room_id'    => $roomId,
         ]);
     }
-}
 
-
-
-
-    protected function handleClientTyping(array $payload): void
+    protected function handleClientTyping(array $data, ?string $channel): void
     {
-        $roomId = (int) data_get($payload, 'data.room_id');
-        $userId = (int) data_get($payload, 'data.user_id');
-
-        Log::info('HandleWsMessageReceived: ClientTyping', [
-            'room_id' => $roomId,
-            'user_id' => $userId,
+        Log::info('WS typing', [
+            'room_id'  => (int) data_get($data, 'room_id'),
+            'user_id'  => (int) data_get($data, 'user_id'),
+            'channel'  => $channel,
         ]);
-
-        // اگر بعداً رو تایپینگ هم بخوای broadcast کنی، اینجا انجام می‌دیم
-        // فعلاً فقط لاگ.
     }
 }

@@ -33,13 +33,11 @@ class ChatMessageCreated implements ShouldBroadcastNow
     public function broadcastOn(): Channel
     {
         return new Channel('chat.' . $this->roomId);
-        // اگر بعداً PrivateChannel بخوای:
-        // return new PrivateChannel('chat.' . $this->roomId);
     }
 
     /**
      * اسم event سمت کلاینت
-     * یعنی در فرانت باید گوش بدی روی: 'ChatMessageCreated'
+     * یعنی در فرانت باید گوش بدی روی: '.ChatMessageCreated'
      */
     public function broadcastAs(): string
     {
@@ -51,7 +49,6 @@ class ChatMessageCreated implements ShouldBroadcastNow
      */
     public function broadcastWith(): array
     {
-        // مطمئن می‌شیم user لود شده:
         $message = $this->message->loadMissing('user:id,name,email');
 
         return [
@@ -67,7 +64,7 @@ class ChatMessageCreated implements ShouldBroadcastNow
                     'email' => $message->user->email,
                 ] : null,
                 'content'    => $message->content,
-                'kind'       => $message->kind, // text / friend_request / system
+                'kind'       => $message->kind,
                 'created_at' => optional($message->created_at)->toIso8601String(),
             ],
         ];

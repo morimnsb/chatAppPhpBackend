@@ -2,14 +2,11 @@
 
 use Illuminate\Support\Facades\Broadcast;
 
-Broadcast::channel('user.{userId}', function ($user, $userId) {
-    if (! $user) return false;
-    if ((int) $user->id !== (int) $userId) return false;
-
-    return [
-        'id'    => $user->id,
-        'name'  => $user->name,
-        'email' => $user->email,
-    ];
+Broadcast::channel('presence.global', function ($user) {
+    return ['id' => $user->id, 'name' => $user->name];
 });
 
+// اگر چنل چت هم داری مثلا:
+Broadcast::channel('chat.{roomId}', function ($user, $roomId) {
+    return ['id' => $user->id, 'name' => $user->name];
+});

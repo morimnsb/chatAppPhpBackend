@@ -5,6 +5,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 
 return Application::configure(basePath: dirname(__DIR__))
+    ->withProviders(require __DIR__.'/providers.php')
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
@@ -13,9 +14,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        // middleware config if you need it later
+        //
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        // exception config if you need it later
+        //
     })
     ->create();
