@@ -11,7 +11,6 @@ class HandleWsClientEvents
 {
     public function handle($event): void
     {
-        // بعضی جاها ممکنه message آبجکت/استرینگ باشه، پس امن می‌گیریم
         $payload = $event->message ?? null;
 
         if (!is_array($payload)) {
@@ -34,15 +33,11 @@ class HandleWsClientEvents
             return;
         }
 
-        if (!str_starts_with($channel, 'chat.')) {
-            return; // فعلاً فقط chat.*
-        }
-
-        $roomId = (int) str_replace('chat.', '', $channel);
+        // ✅ Accept both: chat.1  OR  private-chat.1
+        $roomId = $this->parseRoomId($channel);
         if ($roomId <= 0) {
-            Log::warning('WS client event: invalid roomId parsed from channel', [
+            Log::warning('WS client event: invalid roomId from channel', [
                 'channel' => $channel,
-                'roomId' => $roomId,
             ]);
             return;
         }
@@ -50,20 +45,23 @@ class HandleWsClientEvents
         Log::info('WS client event received', [
             'event' => $eventName,
             'room_id' => $roomId,
+            'channel' => $channel,
             'data' => $data,
         ]);
 
         switch ($eventName) {
             case 'ClientChatMessage':
+            case 'client-chat-message':
                 $this->handleClientChatMessage($roomId, $data);
                 break;
 
             case 'ClientTyping':
-                $this->handleClientTyping($roomId, $data);
-                break;
-
-            case 'ClientReadReceipt':
-                $this->handleClientReadReceipt($roomId, $data);
+            case 'client-typing':
+                // تو گفتی ذخیره نکنیم؛ فقط log کافیه
+                Log::debug('ClientTyping received', [
+                    'room_id' => $roomId,
+                    'data' => $data,
+                ]);
                 break;
 
             default:
@@ -73,6 +71,26 @@ class HandleWsClientEvents
                 ]);
                 break;
         }
+    }
+
+    private function parseRoomId(string $channel): int
+    {
+        // "private-chat.1" → 1
+        if (str_starts_with($channel, 'private-chat.')) {
+            return (int) substr($channel, strlen('private-chat.'));
+        }
+
+        // "chat.1" → 1
+        if (str_starts_with($channel, 'chat.')) {
+            return (int) substr($channel, strlen('chat.'));
+        }
+
+        // "private-private-chat.1" (اگر یه جایی اشتباه ساخته شده) → هم هندل کنیم
+        if (str_starts_with($channel, 'private-private-chat.')) {
+            return (int) substr($channel, strlen('private-private-chat.'));
+        }
+
+        return 0;
     }
 
     protected function handleClientChatMessage(int $roomId, array $data): void
@@ -101,10 +119,8 @@ class HandleWsClientEvents
                 'user_id' => $userId,
             ]);
 
-            // ✅ broadcast سروری به کل کلاینت‌ها
+            // ✅ broadcast سروری به همه‌ی اعضای private-chat.{roomId}
             broadcast(new ChatMessageCreated($roomId, $message));
-            // اگر نخواهی خود فرستنده هم دوباره دریافت کند:
-            // broadcast(new ChatMessageCreated($roomId, $message))->toOthers();
 
             Log::info('WS chat message broadcasted', [
                 'room_id' => $roomId,
@@ -117,35 +133,5 @@ class HandleWsClientEvents
                 'error' => $e->getMessage(),
             ]);
         }
-    }
-
-    protected function handleClientTyping(int $roomId, array $data): void
-    {
-        $userId = (int) ($data['user_id'] ?? 0);
-        if (!$userId) return;
-
-        // اگر رویداد تایپینگ را واقعاً داری:
-        // broadcast(new \App\Events\TypingUpdated($roomId, $userId));
-        Log::debug('ClientTyping received', [
-            'room_id' => $roomId,
-            'user_id' => $userId,
-        ]);
-    }
-
-    protected function handleClientReadReceipt(int $roomId, array $data): void
-    {
-        $messageId = (int) ($data['message_id'] ?? 0);
-        $readerId  = (int) ($data['reader_id'] ?? 0);
-
-        if (!$messageId || !$readerId) return;
-
-        // TODO: mark as read in DB
-        // broadcast(new \App\Events\MessageRead($roomId, $messageId, $readerId));
-
-        Log::debug('ClientReadReceipt received', [
-            'room_id' => $roomId,
-            'message_id' => $messageId,
-            'reader_id' => $readerId,
-        ]);
     }
 }

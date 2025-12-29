@@ -3,7 +3,7 @@
 namespace App\Events;
 
 use App\Models\Message;
-use Illuminate\Broadcasting\Channel;
+use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Foundation\Events\Dispatchable;
@@ -16,10 +16,6 @@ class ChatMessageCreated implements ShouldBroadcastNow
     public int $roomId;
     public Message $message;
 
-    /**
-     * @param  int              $roomId   chat_rooms.id
-     * @param  \App\Models\Message  $message  مدل مسیج تازه‌ساخته‌شده
-     */
     public function __construct(int $roomId, Message $message)
     {
         $this->roomId  = $roomId;
@@ -27,17 +23,17 @@ class ChatMessageCreated implements ShouldBroadcastNow
     }
 
     /**
-     * کانالی که Reverb رویش broadcast می‌کند
-     * فرانت هم subscribe کرده روی: chat.{roomId}
+     * ✅ IMPORTANT:
+     * Front uses: echo.private(`chat.${roomId}`)
+     * so the real wire channel is: private-chat.{roomId}
      */
-    public function broadcastOn(): Channel
+    public function broadcastOn(): PrivateChannel
     {
-        return new Channel('chat.' . $this->roomId);
+        return new PrivateChannel('chat.' . $this->roomId);
     }
 
     /**
-     * اسم event سمت کلاینت
-     * یعنی در فرانت باید گوش بدی روی: '.ChatMessageCreated'
+     * Front listens to: '.ChatMessageCreated'
      */
     public function broadcastAs(): string
     {
@@ -45,7 +41,7 @@ class ChatMessageCreated implements ShouldBroadcastNow
     }
 
     /**
-     * دیتا‌یی که واقعاً برای فرانت فرستاده می‌شود
+     * Data sent to frontend
      */
     public function broadcastWith(): array
     {
@@ -56,15 +52,15 @@ class ChatMessageCreated implements ShouldBroadcastNow
             'room_id' => $this->roomId,
             'message' => [
                 'id'         => $message->id,
-                'room_id'    => $message->chat_room_id ?? $this->roomId,
-                'sender_id'  => $message->user_id,
+                'room_id'    => (int) ($message->chat_room_id ?? $this->roomId),
+                'sender_id'  => (int) $message->user_id,
                 'sender'     => $message->user ? [
-                    'id'    => $message->user->id,
-                    'name'  => $message->user->name,
-                    'email' => $message->user->email,
+                    'id'    => (int) $message->user->id,
+                    'name'  => (string) $message->user->name,
+                    'email' => (string) $message->user->email,
                 ] : null,
-                'content'    => $message->content,
-                'kind'       => $message->kind,
+                'content'    => (string) $message->content,
+                'kind'       => $message->kind ?? null,
                 'created_at' => optional($message->created_at)->toIso8601String(),
             ],
         ];

@@ -495,6 +495,7 @@ Route::post('/chatMeetUp/friendship/respond', function (Request $request) {
 
 });
 
+Route::middleware('auth:sanctum')->post('/chat/rooms/{room}/messages', [\App\Http\Controllers\ChatMessageController::class, 'store']);
 
 Route::middleware('auth:api')->get('/debug/broadcast/{roomId}', function ($roomId) {
     $roomId = (int) $roomId;
