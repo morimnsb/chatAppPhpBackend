@@ -4,12 +4,12 @@ namespace App\Events;
 
 use App\Models\Message;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Broadcasting\InteractsWithSockets;
 
-class ChatMessageCreated implements ShouldBroadcastNow
+class ChatMessageCreated implements ShouldBroadcast
 {
     use Dispatchable, SerializesModels, InteractsWithSockets;
 

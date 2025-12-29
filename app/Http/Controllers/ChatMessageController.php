@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Events\ChatMessageCreated;
+use App\Events\UserNotificationCreated;
 use App\Models\ChatRoom;
 use App\Models\Message;
 use Illuminate\Http\Request;
@@ -41,8 +42,32 @@ class ChatMessageController extends Controller
             // ✅ Load user relation so broadcast payload has sender info
             $message->loadMissing('user:id,name,email');
 
-            // ✅ Broadcast to other users in the room (sender won't get duplicate)
+            // ✅ Broadcast room event (only users who are in that room page will receive)
             broadcast(new ChatMessageCreated($room->id, $message))->toOthers();
+
+            // ✅ GLOBAL notify: send to all room members except sender
+            // (این باعث میشه اگر یوزر آنلاین باشه ولی داخل صفحه روم نباشه هم نوتیف بگیره)
+            $recipientIds = $room->users()
+                ->where('users.id', '!=', $user->id)
+                ->pluck('users.id')
+                ->map(fn ($id) => (int) $id)
+                ->values()
+                ->all();
+
+            foreach ($recipientIds as $toUserId) {
+                event(new UserNotificationCreated($toUserId, [
+                    'type'       => 'notify_message',
+                    'room_id'    => (int) $room->id,
+                    'message_id' => (int) $message->id,
+                    'from_user'  => [
+                        'id'    => (int) $user->id,
+                        'name'  => $message->user?->name,
+                        'email' => $message->user?->email,
+                    ],
+                    'text'       => $message->content,
+                    'created_at' => optional($message->created_at)->toIso8601String(),
+                ]));
+            }
 
             return response()->json([
                 'ok'      => true,
