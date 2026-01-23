@@ -15,9 +15,6 @@ use App\Models\ChatRoom;
 use App\Models\Message;
 use App\Events\ChatMessageCreated;
 
-use Illuminate\Support\Facades\Broadcast;
-
-Broadcast::routes(['middleware' => ['auth:sanctum']]);
 
 
 // ---- تنظیمات OTP ----
