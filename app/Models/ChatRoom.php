@@ -30,4 +30,10 @@ class ChatRoom extends Model
     {
         return $this->hasOne(Message::class, 'chat_room_id')->latestOfMany();
     }
+
+    protected $casts = [
+  'is_private' => 'boolean',
+  'last_message_at' => 'datetime',
+];
+
 }
