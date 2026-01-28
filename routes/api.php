@@ -14,7 +14,7 @@ use App\Models\Friendship;
 use App\Models\ChatRoom;
 use App\Models\Message;
 use App\Events\ChatMessageCreated;
-
+use App\Events\ChatGlobalNotify;
 // ---- OTP config ----
 if (!defined('OTP_TTL_MINUTES')) {
     define('OTP_TTL_MINUTES', 10);
@@ -475,45 +475,62 @@ Route::middleware('auth:sanctum')->group(function () {
         ]);
     });
 
-    // POST /api/chatMeetUp/messages/{room} (STANDARD response + broadcast)
-    Route::post('/chatMeetUp/messages/{room}', function (Request $request, $room) use ($shapeMessage) {
-        $data = $request->validate([
-            'content' => ['nullable', 'string'],
-            'kind'    => ['nullable', 'string'],
-        ]);
 
-        $me = $request->user();
 
-        $chatRoom = ChatRoom::where('id', $room)
-            ->whereHas('users', fn ($q) => $q->where('users.id', $me->id))
-            ->first();
+Route::middleware('auth:sanctum')->post('/chatMeetUp/messages/{room}', function (
+    Request $request,
+    $room
+) {
+    $data = $request->validate([
+        'content' => ['nullable', 'string'],
+        'kind' => ['nullable', 'string'],
+    ]);
 
-        if (!$chatRoom) {
-            return response()->json(['message' => 'Room not found or you are not a member of this room.'], 404);
-        }
+    $me = $request->user();
 
-        $message = $chatRoom->messages()->create([
-            'user_id' => $me->id,
-            'content' => $data['content'] ?? null,
-            'kind'    => $data['kind'] ?? (defined(Message::class.'::KIND_TEXT') ? Message::KIND_TEXT : 'text'),
-        ]);
+    $chatRoom = ChatRoom::where('id', $room)
+        ->whereHas('users', fn ($q) => $q->where('users.id', $me->id))
+        ->firstOrFail();
 
-        $chatRoom->update(['last_message_at' => now()]);
+    $message = $chatRoom->messages()->create([
+        'user_id' => $me->id,
+        'content' => $data['content'],
+        'kind' => $data['kind'] ?? 'text',
+    ]);
 
-        try {
-            event(new ChatMessageCreated($chatRoom->id, $message));
-        } catch (\Throwable $e) {
-            Log::error('Broadcast ChatMessageCreated failed (send message)', [
-                'msg_id' => $message->id,
-                'error'  => $e->getMessage(),
-            ]);
-        }
+    $chatRoom->update(['last_message_at' => now()]);
+    $chatRoom->loadMissing('users:id');
 
-        return response()->json([
-            'type'    => 'message',
-            'message' => $shapeMessage($message),
-        ], 201);
-    });
+    // 1️⃣ ROOM → full message
+    event(new ChatMessageCreated($chatRoom->id, $message));
+
+    // 2️⃣ USER → global notify (light)
+    foreach ($chatRoom->users as $u) {
+        if ((int) $u->id === (int) $me->id) continue;
+
+        event(new ChatGlobalNotify((int) $u->id, [
+            'type' => 'notify',
+            'room_id' => (int) $chatRoom->id,
+            'message' => [
+                'id' => (int) $message->id,
+                'chat_room_id' => (int) $chatRoom->id,
+                'user_id' => (int) $me->id,
+                'content' => $message->content,
+                'created_at' => $message->created_at->toIso8601String(),
+                'user' => [
+                    'id' => (int) $me->id,
+                    'name' => $me->name,
+                ],
+            ],
+        ]));
+    }
+
+    return response()->json([
+        'type' => 'message',
+        'message' => $message->load('user:id,name,email'),
+    ], 201);
+});
+
 
 });
 
