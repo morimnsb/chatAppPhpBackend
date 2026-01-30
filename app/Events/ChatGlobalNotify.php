@@ -1,5 +1,5 @@
 <?php
-
+// chatAppPhpBackend\app\Events\ChatGlobalNotify.php
 namespace App\Events;
 
 use Illuminate\Broadcasting\PrivateChannel;

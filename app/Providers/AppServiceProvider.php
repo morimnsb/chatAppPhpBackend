@@ -3,26 +3,22 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
-use App\Listeners\HandleWsMessageReceived;
 use Illuminate\Support\Facades\Event;
+use Laravel\Reverb\Events\MessageReceived;
+use App\Listeners\HandleWsMessageReceived;
+
 class AppServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services.
-     */
     public function register(): void
     {
         //
     }
 
-    /**
-     * Bootstrap any application services.
-     */
-public function boot(): void
-{
-    Event::listen(
-        MessageReceived::class,
-        HandleWsMessageReceived::class,
-    );
-}
+    public function boot(): void
+    {
+        Event::listen(
+            MessageReceived::class,
+            HandleWsMessageReceived::class,
+        );
+    }
 }

@@ -13,8 +13,10 @@ use App\Models\User;
 use App\Models\Friendship;
 use App\Models\ChatRoom;
 use App\Models\Message;
+
 use App\Events\ChatMessageCreated;
 use App\Events\ChatGlobalNotify;
+
 // ---- OTP config ----
 if (!defined('OTP_TTL_MINUTES')) {
     define('OTP_TTL_MINUTES', 10);
@@ -131,10 +133,7 @@ Route::post('/auth/logout', function (Request $request) {
 // GET /api/auth/users
 Route::get('/auth/users', function (Request $request) {
     $me = $request->user();
-
-    if (!$me) {
-        return response()->json([], 401);
-    }
+    if (!$me) return response()->json([], 401);
 
     $users = User::query()
         ->where('id', '!=', $me->id)
@@ -142,9 +141,7 @@ Route::get('/auth/users', function (Request $request) {
         ->orderBy('id')
         ->get();
 
-    if ($users->isEmpty()) {
-        return response()->json($users);
-    }
+    if ($users->isEmpty()) return response()->json($users);
 
     $otherIds = $users->pluck('id')->all();
 
@@ -160,13 +157,12 @@ Route::get('/auth/users', function (Request $request) {
         ->get();
 
     $friendshipIndex = [];
-
     foreach ($friendships as $fs) {
         if ((int)$fs->requester_id === (int)$me->id) {
-            $otherId   = (int)$fs->receiver_id;
+            $otherId = (int)$fs->receiver_id;
             $direction = 'outgoing';
         } else {
-            $otherId   = (int)$fs->requester_id;
+            $otherId = (int)$fs->requester_id;
             $direction = 'incoming';
         }
 
@@ -216,9 +212,10 @@ Route::get('/auth/users', function (Request $request) {
 
 Route::middleware('auth:sanctum')->group(function () {
 
-    // helper: unify message payload
+    // helper: unify message payload (ONE format everywhere)
     $shapeMessage = function (Message $m) {
-        $m->loadMissing('user:id,name,email'); // ✅ no photo to avoid sqlite column error
+        $m->loadMissing('user:id,name,email'); // no photo (sqlite safe)
+
         return [
             'id'           => (int)$m->id,
             'chat_room_id' => (int)$m->chat_room_id,
@@ -245,9 +242,7 @@ Route::middleware('auth:sanctum')->group(function () {
         $from = $request->user();
         $to   = User::find($data['to_user_id']);
 
-        if (!$to) {
-            return response()->json(['message' => 'User not found'], 404);
-        }
+        if (!$to) return response()->json(['message' => 'User not found'], 404);
 
         if ((int)$from->id === (int)$to->id) {
             return response()->json(['message' => 'نمی‌توانید خودتان را اضافه کنید.'], 422);
@@ -269,14 +264,12 @@ Route::middleware('auth:sanctum')->group(function () {
         }
 
         return DB::transaction(function () use ($from, $to, $data, $shapeMessage) {
-
             $friendship = Friendship::create([
                 'requester_id' => $from->id,
                 'receiver_id'  => $to->id,
                 'status'       => 'pending',
             ]);
 
-            // find/create private room for these two users
             $existingRoomRow = DB::table('chat_rooms as r')
                 ->join('chat_room_user as cru1', 'cru1.chat_room_id', '=', 'r.id')
                 ->join('chat_room_user as cru2', 'cru2.chat_room_id', '=', 'r.id')
@@ -300,7 +293,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
             $content = trim($data['content'] ?? '') ?: 'سلام! من برایت درخواست دوستی فرستادم 🙌';
 
-            // ✅ safest: do not rely on missing constant
             $friendKind = defined(Message::class.'::KIND_FRIEND_REQUEST')
                 ? Message::KIND_FRIEND_REQUEST
                 : 'friend_request';
@@ -400,8 +392,8 @@ Route::middleware('auth:sanctum')->group(function () {
                         ->first();
                 }
 
-                $friendshipId        = $friendship?->id;
-                $friendshipRaw       = $friendship?->status;
+                $friendshipId  = $friendship?->id;
+                $friendshipRaw = $friendship?->status;
 
                 $friendshipStatus    = 'none';
                 $friendshipDirection = null;
@@ -424,16 +416,16 @@ Route::middleware('auth:sanctum')->group(function () {
                 }
 
                 return [
-                    'id'                  => $partner?->id,
-                    'first_name'          => $partner?->name ?? $partner?->email ?? 'Unknown',
-                    'last_name'           => null,
-                    'room_id'             => $room->id,
-                    'last_message'        => $lastMsg?->content ?? '',
-                    'last_message_at'     => optional($lastMsg?->created_at)->toIso8601String(),
-                    'friendship_id'       => $friendshipId,
-                    'friendship_raw'      => $friendshipRaw,
-                    'friendship_status'   => $friendshipStatus,
-                    'friendship_direction'=> $friendshipDirection,
+                    'id'                   => $partner?->id,
+                    'first_name'           => $partner?->name ?? $partner?->email ?? 'Unknown',
+                    'last_name'            => null,
+                    'room_id'              => $room->id,
+                    'last_message'         => $lastMsg?->content ?? '',
+                    'last_message_at'      => optional($lastMsg?->created_at)->toIso8601String(),
+                    'friendship_id'        => $friendshipId,
+                    'friendship_raw'       => $friendshipRaw,
+                    'friendship_status'    => $friendshipStatus,
+                    'friendship_direction' => $friendshipDirection,
                 ];
             })->values();
 
@@ -451,7 +443,16 @@ Route::middleware('auth:sanctum')->group(function () {
         }
     });
 
-    // GET /api/chatMeetUp/messages/{room} (STANDARD message shape)
+    /*
+    |--------------------------------------------------------------------------
+    | Messages (FIXED)
+    |--------------------------------------------------------------------------
+    | ✅ One GET + one POST (no duplicates)
+    | ✅ Same shape everywhere (GET/POST/notify)
+    | ✅ POST will appear in route:list
+    */
+
+    // GET /api/chatMeetUp/messages/{room}
     Route::get('/chatMeetUp/messages/{room}', function (Request $request, $room) use ($shapeMessage) {
         $me = $request->user();
 
@@ -467,101 +468,76 @@ Route::middleware('auth:sanctum')->group(function () {
             ->with('user:id,name,email')
             ->orderBy('created_at', 'asc')
             ->get()
-            ->map(fn (Message $m) => $shapeMessage($m));
+            ->map(fn (Message $m) => $shapeMessage($m))
+            ->values();
 
         return response()->json([
             'chat_room_id' => (int)$chatRoom->id,
             'messages'     => $messages,
-        ]);
+        ], 200);
     });
 
+    // POST /api/chatMeetUp/messages/{room}
+    Route::post('/chatMeetUp/messages/{room}', function (Request $request, $room) use ($shapeMessage) {
+        $data = $request->validate([
+            'content' => ['nullable', 'string'],
+            'kind'    => ['nullable', 'string'],
+        ]);
 
+        $me = $request->user();
 
-Route::middleware('auth:sanctum')->post('/chatMeetUp/messages/{room}', function (
-    Request $request,
-    $room
-) {
-    $data = $request->validate([
-        'content' => ['nullable', 'string'],
-        'kind' => ['nullable', 'string'],
-    ]);
+        $chatRoom = ChatRoom::where('id', $room)
+            ->whereHas('users', fn ($q) => $q->where('users.id', $me->id))
+            ->firstOrFail();
 
-    $me = $request->user();
+        $message = $chatRoom->messages()->create([
+            'user_id' => $me->id,
+            'content' => $data['content'] ?? '',
+            'kind'    => $data['kind'] ?? 'text',
+        ]);
 
-    $chatRoom = ChatRoom::where('id', $room)
-        ->whereHas('users', fn ($q) => $q->where('users.id', $me->id))
-        ->firstOrFail();
+        $chatRoom->update(['last_message_at' => now()]);
+        $chatRoom->loadMissing('users:id');
 
-    $message = $chatRoom->messages()->create([
-        'user_id' => $me->id,
-        'content' => $data['content'],
-        'kind' => $data['kind'] ?? 'text',
-    ]);
+        // 1) ROOM broadcast (full)
+        event(new ChatMessageCreated($chatRoom->id, $message));
 
-    $chatRoom->update(['last_message_at' => now()]);
-    $chatRoom->loadMissing('users:id');
+        // 2) USER global notify (light but SAME SHAPE)
+        foreach ($chatRoom->users as $u) {
+            if ((int)$u->id === (int)$me->id) continue;
 
-    // 1️⃣ ROOM → full message
-    event(new ChatMessageCreated($chatRoom->id, $message));
+            event(new ChatGlobalNotify((int)$u->id, [
+                'type'    => 'notify',
+                'room_id' => (int)$chatRoom->id,
+                'message' => $shapeMessage($message->fresh(['user:id,name,email'])),
+            ]));
+        }
 
-    // 2️⃣ USER → global notify (light)
-    foreach ($chatRoom->users as $u) {
-        if ((int) $u->id === (int) $me->id) continue;
+        return response()->json([
+            'type'    => 'message',
+            'message' => $shapeMessage($message->fresh(['user:id,name,email'])),
+        ], 201);
+    });
 
-        event(new ChatGlobalNotify((int) $u->id, [
-            'type' => 'notify',
-            'room_id' => (int) $chatRoom->id,
-            'message' => [
-                'id' => (int) $message->id,
-                'chat_room_id' => (int) $chatRoom->id,
-                'user_id' => (int) $me->id,
-                'content' => $message->content,
-                'created_at' => $message->created_at->toIso8601String(),
-                'user' => [
-                    'id' => (int) $me->id,
-                    'name' => $me->name,
-                ],
-            ],
-        ]));
-    }
+    /*
+    |--------------------------------------------------------------------------
+    | Debug broadcast (optional)
+    |--------------------------------------------------------------------------
+    */
+    Route::get('/debug/broadcast/{roomId}', function (Request $request, $roomId) {
+        $roomId = (int)$roomId;
+        $me = $request->user();
 
-    return response()->json([
-        'type' => 'message',
-        'message' => $message->load('user:id,name,email'),
-    ], 201);
-});
+        $m = Message::create([
+            'chat_room_id' => $roomId,
+            'user_id'      => $me->id,
+            'content'      => 'debug broadcast ' . now()->toDateTimeString(),
+            'kind'         => defined(Message::class.'::KIND_TEXT') ? Message::KIND_TEXT : 'text',
+        ]);
 
+        event(new ChatMessageCreated($roomId, $m));
 
-});
+        return response()->json(['ok' => true, 'roomId' => $roomId, 'messageId' => $m->id]);
+    });
 
-
-/*
-|--------------------------------------------------------------------------
-| IMPORTANT: avoid double sources
-|--------------------------------------------------------------------------
-| If you keep this controller route, make sure it returns EXACT SAME shape
-| and dispatches ChatMessageCreated exactly once. Otherwise delete it.
-*/
-// Route::middleware('auth:sanctum')->post('/chat/rooms/{room}/messages', [\App\Http\Controllers\ChatMessageController::class, 'store']);
-
-
-/*
-|--------------------------------------------------------------------------
-| Debug broadcast (optional) - use auth:sanctum
-|--------------------------------------------------------------------------
-*/
-Route::middleware('auth:sanctum')->get('/debug/broadcast/{roomId}', function (Request $request, $roomId) {
-    $roomId = (int)$roomId;
-    $me = $request->user();
-
-    $m = Message::create([
-        'chat_room_id' => $roomId,
-        'user_id'      => $me->id,
-        'content'      => 'debug broadcast ' . now()->toDateTimeString(),
-        'kind'         => defined(Message::class.'::KIND_TEXT') ? Message::KIND_TEXT : 'text',
-    ]);
-
-    event(new ChatMessageCreated($roomId, $m));
-
-    return ['ok' => true, 'roomId' => $roomId, 'messageId' => $m->id];
 });
