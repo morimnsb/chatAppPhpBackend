@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Message extends Model
 {
@@ -25,12 +26,12 @@ class Message extends Model
         'updated_at' => 'datetime',
     ];
 
-    public function room()
+    public function room(): BelongsTo
     {
         return $this->belongsTo(ChatRoom::class, 'chat_room_id');
     }
 
-    public function user()
+    public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }

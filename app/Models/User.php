@@ -4,9 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
-use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Hash;
+use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class User extends Authenticatable
 {
@@ -34,30 +36,37 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
     ];
 
-    public function setPasswordAttribute($val)
-{
-    if (is_string($val) && preg_match('/^\$2[ayb]\$[0-9]{2}\$/', $val)) {
-        // قبلاً bcrypt شده؛ همان را ذخیره کن
-        $this->attributes['password'] = $val;
-    } else {
-        // هر ورودی دیگری را bcrypt کن
-        $this->attributes['password'] = Hash::make($val);
-    }
-}
-
-    public function hasVerifiedEmail()
+    // ✅ Advanced: use modern mutator + prevents double-hash safely
+    public function setPasswordAttribute($value): void
     {
-        return !is_null($this->email_verified_at);
-    }
-    // app/Models/User.php
-public function chatRooms()
-{
-    return $this->belongsToMany(\App\Models\ChatRoom::class, 'chat_room_user')
-                ->withTimestamps();
-}
-public function messages()
-{
-    return $this->hasMany(Message::class);
-}
+        if (!is_string($value) || $value === '') return;
 
+        $this->attributes['password'] =
+            Hash::info($value)['algoName'] !== 'unknown'
+                ? $value
+                : Hash::make($value);
+    }
+
+    // ✅ Optional: always have name
+    public function getNameAttribute($value): string
+    {
+        if (is_string($value) && $value !== '') return $value;
+
+        $fn = (string) ($this->attributes['first_name'] ?? '');
+        $ln = (string) ($this->attributes['last_name'] ?? '');
+        $full = trim($fn.' '.$ln);
+
+        return $full !== '' ? $full : 'User#'.$this->id;
+    }
+
+    public function chatRooms(): BelongsToMany
+    {
+        return $this->belongsToMany(ChatRoom::class, 'chat_room_user')
+            ->withTimestamps();
+    }
+
+    public function messages(): HasMany
+    {
+        return $this->hasMany(Message::class);
+    }
 }

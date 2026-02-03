@@ -3,6 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class ChatRoom extends Model
 {
@@ -14,26 +17,30 @@ class ChatRoom extends Model
         'private_key',
     ];
 
-    public function users()
+    protected $casts = [
+        'is_private'       => 'boolean',
+        'last_message_at'  => 'datetime',
+    ];
+
+    public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'chat_room_user', 'chat_room_id', 'user_id')
             ->withTimestamps();
     }
 
-    public function messages()
+    public function messages(): HasMany
     {
         return $this->hasMany(Message::class, 'chat_room_id');
     }
 
-    // ✅ اضافه کن
-    public function lastMessage()
+    public function lastMessage(): HasOne
     {
         return $this->hasOne(Message::class, 'chat_room_id')->latestOfMany();
     }
 
-    protected $casts = [
-  'is_private' => 'boolean',
-  'last_message_at' => 'datetime',
-];
-
+    // ✅ Advanced helper for channels/policies
+    public function hasMember(int $userId): bool
+    {
+        return $this->users()->whereKey($userId)->exists();
+    }
 }
