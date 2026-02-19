@@ -14,33 +14,83 @@ class AuthController extends Controller
     private const OTP_TTL_MINUTES = 10;
 
     public function register(Request $request)
-    {
-        $data = $request->validate([
-            'name'     => ['required', 'string', 'max:255'],
-            'email'    => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
-        ]);
+{
+    // ✅ accept Node-style fields too
+    $data = $request->validate([
+        'first_name' => ['nullable', 'string', 'max:255'],
+        'last_name'  => ['nullable', 'string', 'max:255'],
+        'name'       => ['nullable', 'string', 'max:255'],
 
-        $user = User::create([
-            'name'     => $data['name'],
-            'email'    => $data['email'],
-            'password' => Hash::make($data['password']),
-        ]);
+        'email'      => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
 
-        $otp = random_int(100000, 999999);
-        Cache::put('email_otp_' . $user->email, $otp, now()->addMinutes(self::OTP_TTL_MINUTES));
+        'password'   => ['required', 'string', 'min:8'],
+        'password2'  => ['nullable', 'string'],
+        'password_confirmation' => ['nullable', 'string'],
+    ]);
 
-        $response = [
-            'message' => 'ثبت‌نام انجام شد. لطفاً ایمیل را با OTP تأیید کنید.',
-            'email'   => $user->email,
-        ];
+    // normalize email like Node
+    $email = strtolower(trim($data['email']));
 
-        if (app()->environment('local')) {
-            $response['otp'] = $otp;
-        }
+    // pick password2 from multiple possible fields
+    $password2 = $data['password2']
+        ?? $data['password_confirmation']
+        ?? null;
 
-        return response()->json($response, 201);
+    // ---- build first/last from name if needed
+    $first = trim((string)($data['first_name'] ?? ''));
+    $last  = trim((string)($data['last_name'] ?? ''));
+
+    if ((!$first || !$last) && !empty($data['name'])) {
+        $full = preg_replace('/\s+/', ' ', trim((string)$data['name']));
+        $parts = $full ? explode(' ', $full) : [];
+        if (!$first) $first = array_shift($parts) ?? '';
+        if (!$last)  $last  = trim(implode(' ', $parts));
     }
+
+    // ---- manual validation errors to match Node
+    $errors = [];
+
+    if (!$first) $errors['first_name'] = ['First name is required.'];
+    if (!$last)  $errors['last_name']  = ['Last name is required.'];
+    if (!$password2) $errors['password2'] = ['Repeat password is required.'];
+    if (!empty($data['password']) && $password2 && $data['password'] !== $password2) {
+        $errors['password2'] = ['Passwords do not match.'];
+    }
+
+    if (!empty($errors)) {
+        return response()->json(['errors' => $errors], 422);
+    }
+
+    $name = trim($first . ' ' . $last);
+
+    $user = User::create([
+        'name'     => $name,
+        'email'    => $email,
+        'password' => Hash::make($data['password']),
+    ]);
+
+    $otp = random_int(100000, 999999);
+    Cache::put('email_otp_' . $user->email, $otp, now()->addMinutes(self::OTP_TTL_MINUTES));
+
+    $response = [
+        'ok'      => true,
+        'message' => 'Registered successfully. Please verify your email.',
+        'user'    => [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'email_verified_at' => $user->email_verified_at,
+        ],
+    ];
+
+    // ✅ like Node: return otp in local for testing
+    if (app()->environment('local')) {
+        $response['otp'] = $otp;
+    }
+
+    return response()->json($response, 201);
+}
+
 
     public function verifyEmail(Request $request)
     {

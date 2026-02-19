@@ -1,13 +1,14 @@
 <?php
-// chatAppPhpBackend\routes\channels.php
+
 use Illuminate\Support\Facades\Broadcast;
 use App\Models\ChatRoom;
 
 /**
  * Private chat room membership
- * Echo subscribes to: private-chat.{roomId}
- * Channel definition name must be WITHOUT "private-"
+ * Echo private('chat.{roomId}') => private-chat.{roomId}
+ * Channel name here must be WITHOUT "private-"
  */
+
 Broadcast::channel('chat.{roomId}', function ($user, $roomId) {
     $roomId = (int) $roomId;
     if ($roomId <= 0) return false;
@@ -18,9 +19,10 @@ Broadcast::channel('chat.{roomId}', function ($user, $roomId) {
         ->exists();
 });
 
+
 /**
  * Global Presence
- * Echo.join('global')  => subscribes to presence-global
+ * Echo.join('global') => presence-global
  */
 Broadcast::channel('global', function ($user) {
     return [
@@ -29,11 +31,11 @@ Broadcast::channel('global', function ($user) {
     ];
 });
 
-
 /**
  * Per-user private notifications
- * Echo subscribes to: private-user.{id}
+ * Echo.private('user.{id}') => private-user.{id}
  */
 Broadcast::channel('user.{id}', function ($user, $id) {
     return (int) $user->id === (int) $id;
 });
+

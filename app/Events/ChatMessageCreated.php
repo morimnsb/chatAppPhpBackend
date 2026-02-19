@@ -1,5 +1,6 @@
 <?php
-// chatAppPhpBackend\app\Events\ChatMessageCreated.php
+// chatAppPhpBackend/app/Events/ChatMessageCreated.php
+
 namespace App\Events;
 
 use App\Models\Message;
@@ -18,6 +19,7 @@ class ChatMessageCreated implements ShouldBroadcastNow
         public Message $message
     ) {}
 
+    // ✅ was PresenceChannel -> now PrivateChannel
     public function broadcastOn(): PrivateChannel
     {
         return new PrivateChannel('chat.' . $this->roomId);
@@ -33,19 +35,23 @@ class ChatMessageCreated implements ShouldBroadcastNow
         $m = $this->message->loadMissing('user:id,name,email');
 
         return [
-            'type' => 'message',
+            'type'    => 'message',
             'room_id' => (int) $this->roomId,
+            'roomId'  => (int) $this->roomId,
             'message' => [
-                'id' => (int) $m->id,
+                'id'           => (int) $m->id,
                 'chat_room_id' => (int) $m->chat_room_id,
-                'user_id' => (int) $m->user_id,
-                'content' => $m->content,
-                'kind' => $m->kind,
-                'created_at' => optional($m->created_at)->toIso8601String(),
-                'updated_at' => optional($m->updated_at)->toIso8601String(),
-                'user' => [
-                    'id' => (int) $m->user->id,
-                    'name' => $m->user->name,
+                'room_id'      => (int) $m->chat_room_id,
+                'user_id'      => (int) $m->user_id,
+                'sender_id'    => (int) $m->user_id,
+                'content'      => $m->content,
+                'text'         => $m->content,
+                'kind'         => $m->kind,
+                'created_at'   => optional($m->created_at)->toIso8601String(),
+                'updated_at'   => optional($m->updated_at)->toIso8601String(),
+                'user'         => [
+                    'id'    => (int) $m->user->id,
+                    'name'  => $m->user->name,
                     'email' => $m->user->email,
                 ],
             ],

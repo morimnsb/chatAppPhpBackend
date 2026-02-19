@@ -1,5 +1,5 @@
 <?php
-// chatAppPhpBackend\app\Events\ChatGlobalNotify.php
+
 namespace App\Events;
 
 use Illuminate\Broadcasting\PrivateChannel;
@@ -23,7 +23,7 @@ class ChatGlobalNotify implements ShouldBroadcastNow
 
     public function broadcastAs(): string
     {
-        // فرانت: listen('.direct.message')
+        // ✅ فرانت: listen('.direct.message')
         return 'direct.message';
     }
 
