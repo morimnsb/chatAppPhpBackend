@@ -5,30 +5,27 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class Message extends Model
+class RefreshToken extends Model
 {
-    protected $table = 'Message';
+    protected $table = 'RefreshToken';
 
     public $timestamps = true;
     const CREATED_AT = 'createdAt';
-    const UPDATED_AT = 'updatedAt';
+    const UPDATED_AT = null; // Prisma doesn't have updatedAt here
 
     protected $fillable = [
-        'roomId',
         'userId',
-        'content',
-        'kind',
+        'tokenHash',
+        'revokedAt',
+        'expiresAt',
+        'createdAt',
     ];
 
     protected $casts = [
         'createdAt' => 'datetime',
-        'updatedAt' => 'datetime',
+        'revokedAt' => 'datetime',
+        'expiresAt' => 'datetime',
     ];
-
-    public function room(): BelongsTo
-    {
-        return $this->belongsTo(ChatRoom::class, 'roomId');
-    }
 
     public function user(): BelongsTo
     {

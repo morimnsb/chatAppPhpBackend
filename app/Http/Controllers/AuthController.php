@@ -5,92 +5,81 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 use App\Models\User;
 use App\Models\Friendship;
+
+use Firebase\JWT\JWT;
 
 class AuthController extends Controller
 {
     private const OTP_TTL_MINUTES = 10;
 
     public function register(Request $request)
-{
-    // ✅ accept Node-style fields too
-    $data = $request->validate([
-        'first_name' => ['nullable', 'string', 'max:255'],
-        'last_name'  => ['nullable', 'string', 'max:255'],
-        'name'       => ['nullable', 'string', 'max:255'],
+    {
+        $data = $request->validate([
+            'name'     => 'required|string|max:120',
+            'email'    => 'required|email|max:190',
+            'password' => 'required|string|min:6|max:200',
+        ]);
 
-        'email'      => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+        $email = strtolower(trim($data['email']));
 
-        'password'   => ['required', 'string', 'min:8'],
-        'password2'  => ['nullable', 'string'],
-        'password_confirmation' => ['nullable', 'string'],
-    ]);
+        if (User::where('email', $email)->exists()) {
+            return response()->json(['message' => 'Email already exists'], 409);
+        }
 
-    // normalize email like Node
-    $email = strtolower(trim($data['email']));
+        // ✅ ALWAYS bcrypt here (do NOT rely only on mutator)
+        $plainPassword = (string) $data['password'];
+        $hashedPassword = Hash::make($plainPassword);
 
-    // pick password2 from multiple possible fields
-    $password2 = $data['password2']
-        ?? $data['password_confirmation']
-        ?? null;
+        $user = User::create([
+            'name'     => trim($data['name']),
+            'email'    => $email,
+            'password' => $hashedPassword, // ✅ guaranteed bcrypt
+        ]);
 
-    // ---- build first/last from name if needed
-    $first = trim((string)($data['first_name'] ?? ''));
-    $last  = trim((string)($data['last_name'] ?? ''));
+        // ✅ OTP cache
+        $otp = (string) random_int(100000, 999999);
+        Cache::put('email_otp_' . $email, $otp, now()->addMinutes(self::OTP_TTL_MINUTES));
 
-    if ((!$first || !$last) && !empty($data['name'])) {
-        $full = preg_replace('/\s+/', ' ', trim((string)$data['name']));
-        $parts = $full ? explode(' ', $full) : [];
-        if (!$first) $first = array_shift($parts) ?? '';
-        if (!$last)  $last  = trim(implode(' ', $parts));
+        $isDev = app()->environment('local');
+
+        return response()->json([
+            'ok'      => true,
+            'message' => 'Registered. Please verify email.',
+            'user'    => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email],
+            'otp'     => $isDev ? $otp : null,
+        ]);
     }
 
-    // ---- manual validation errors to match Node
-    $errors = [];
+    public function resendVerifyCode(Request $request)
+    {
+        $data = $request->validate([
+            'email' => ['required', 'email'],
+        ]);
 
-    if (!$first) $errors['first_name'] = ['First name is required.'];
-    if (!$last)  $errors['last_name']  = ['Last name is required.'];
-    if (!$password2) $errors['password2'] = ['Repeat password is required.'];
-    if (!empty($data['password']) && $password2 && $data['password'] !== $password2) {
-        $errors['password2'] = ['Passwords do not match.'];
+        $email = strtolower(trim($data['email']));
+
+        $user = User::where('email', $email)->first();
+        if (!$user) return response()->json(['message' => 'User not found'], 404);
+
+        if ($user->emailVerifiedAt) {
+            return response()->json(['ok' => true, 'message' => 'Already verified']);
+        }
+
+        $otp = (string) random_int(100000, 999999);
+        Cache::put('email_otp_' . $email, $otp, now()->addMinutes(self::OTP_TTL_MINUTES));
+
+        $isDev = app()->environment('local');
+
+        return response()->json([
+            'ok'      => true,
+            'message' => 'OTP sent.',
+            'otp'     => $isDev ? $otp : null,
+        ]);
     }
-
-    if (!empty($errors)) {
-        return response()->json(['errors' => $errors], 422);
-    }
-
-    $name = trim($first . ' ' . $last);
-
-    $user = User::create([
-        'name'     => $name,
-        'email'    => $email,
-        'password' => Hash::make($data['password']),
-    ]);
-
-    $otp = random_int(100000, 999999);
-    Cache::put('email_otp_' . $user->email, $otp, now()->addMinutes(self::OTP_TTL_MINUTES));
-
-    $response = [
-        'ok'      => true,
-        'message' => 'Registered successfully. Please verify your email.',
-        'user'    => [
-            'id' => $user->id,
-            'name' => $user->name,
-            'email' => $user->email,
-            'email_verified_at' => $user->email_verified_at,
-        ],
-    ];
-
-    // ✅ like Node: return otp in local for testing
-    if (app()->environment('local')) {
-        $response['otp'] = $otp;
-    }
-
-    return response()->json($response, 201);
-}
-
 
     public function verifyEmail(Request $request)
     {
@@ -99,70 +88,117 @@ class AuthController extends Controller
             'otp'   => ['required', 'digits:6'],
         ]);
 
-        $email = $data['email'];
-        $otp   = $data['otp'];
+        $email = strtolower(trim($data['email']));
+        $otp   = (string) $data['otp'];
 
         $cachedOtp = Cache::get('email_otp_' . $email);
 
         if (!$cachedOtp) {
-            return response()->json(['message' => 'OTP منقضی شده یا وجود ندارد.'], 422);
+            return response()->json(['message' => 'OTP expired or not found'], 422);
         }
-
         if ((string) $cachedOtp !== (string) $otp) {
-            return response()->json(['message' => 'OTP اشتباه است.'], 422);
+            return response()->json(['message' => 'OTP is incorrect'], 422);
         }
 
         $user = User::where('email', $email)->first();
-        if (!$user) {
-            return response()->json(['message' => 'کاربر پیدا نشد.'], 404);
-        }
+        if (!$user) return response()->json(['message' => 'User not found'], 404);
 
-        $user->email_verified_at = now();
+        // ✅ Prisma column name
+        $user->emailVerifiedAt = now();
         $user->save();
 
         Cache::forget('email_otp_' . $email);
 
-        $token = $user->createToken('access')->plainTextToken;
+        // ✅ issue access token
+        $access = $this->signAccessToken($user);
 
         return response()->json([
-            'message'      => 'ایمیل با موفقیت تأیید شد.',
-            'access_token' => $token,
+            'ok'           => true,
+            'message'      => 'Email verified',
+            'user'         => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email],
+            'access_token' => $access,
             'token_type'   => 'Bearer',
-            'user'         => $user,
+            'expires_in'   => 15 * 60,
         ]);
     }
 
     public function login(Request $request)
     {
         $data = $request->validate([
-            'email'    => ['required', 'email'],
-            'password' => ['required'],
+            'email'    => 'required|email',
+            'password' => 'required|string',
         ]);
 
-        $user = User::where('email', $data['email'])->first();
+        $email = strtolower(trim($data['email']));
+        $user  = User::where('email', $email)->first();
 
-        if (!$user || !Hash::check($data['password'], $user->password)) {
-            return response()->json(['message' => 'Invalid credentials'], 422);
+        if (!$user) {
+            return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
-        $token = $user->createToken('access')->plainTextToken;
+        // ✅ Prisma column name
+        if (!$user->emailVerifiedAt) {
+            return response()->json([
+                'message' => 'Email not verified',
+                'meta'    => ['code' => 'EMAIL_NOT_VERIFIED'],
+            ], 403);
+        }
+
+        // ✅ Prevent 500 when password hash is NOT bcrypt
+        try {
+            $ok = Hash::check((string) $data['password'], (string) $user->password);
+        } catch (\Throwable $e) {
+            Log::warning('PASSWORD_HASH_INVALID_FORMAT', [
+                'user_id' => $user->id,
+                'email'   => $user->email,
+                'pw_head' => substr((string) $user->password, 0, 12),
+                'error'   => $e->getMessage(),
+            ]);
+
+            // This is the exact crash you saw: "This password does not use the Bcrypt algorithm."
+            return response()->json([
+                'message' => 'PASSWORD_HASH_INVALID',
+                'meta'    => [
+                    'code' => 'PASSWORD_HASH_INVALID',
+                    'hint' => 'Stored password is not bcrypt. Re-register user or migrate password hashes.',
+                ],
+            ], 409);
+        }
+
+        if (!$ok) {
+            return response()->json(['message' => 'Invalid credentials'], 401);
+        }
+
+        $access = $this->signAccessToken($user);
 
         return response()->json([
-            'access_token' => $token,
+            'ok'           => true,
+            'user'         => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email],
+            'access_token' => $access,
             'token_type'   => 'Bearer',
-            'user'         => $user,
+            'expires_in'   => 15 * 60,
         ]);
     }
 
     public function me(Request $request)
     {
-        return response()->json($request->user());
+        return response()->json([
+            'ok'   => true,
+            'user' => $request->user(),
+        ]);
     }
 
     public function logout(Request $request)
     {
-        $request->user()?->currentAccessToken()?->delete();
         return response()->json(['ok' => true]);
+    }
+
+    public function refresh(Request $request)
+    {
+        return response()->json([
+            'ok'      => false,
+            'message' => 'Refresh not implemented on Laravel yet',
+        ], 501);
     }
 
     public function users(Request $request)
@@ -172,7 +208,7 @@ class AuthController extends Controller
 
         $users = User::query()
             ->where('id', '!=', $me->id)
-            ->select('id', 'name', 'email', 'created_at')
+            ->select('id', 'name', 'email', 'createdAt')
             ->orderBy('id')
             ->get();
 
@@ -227,14 +263,40 @@ class AuthController extends Controller
                 'id'                   => $u->id,
                 'name'                 => $u->name,
                 'email'                => $u->email,
-                'created_at'           => $u->created_at,
+                'createdAt'            => $u->createdAt,
                 'friendship_status'    => $info['status'] ?? 'none',
                 'friendship_direction' => $info['direction'] ?? null,
                 'friendship_id'        => $info['id'] ?? null,
-                'friendship_raw'       => $info['raw'] ?? null,
             ];
         });
 
         return response()->json($usersWithFriendship);
+    }
+
+    private function signAccessToken(User $user): string
+    {
+        $secret = (string) env('JWT_SECRET_SHARED', '');
+        $aud = (string) env('JWT_AUDIENCE', 'chatapp');
+        $iss = (string) env('JWT_ISSUER', 'laravel');
+
+        if ($secret === '' || strlen($secret) < 32) {
+            throw new \RuntimeException('JWT_SECRET_SHARED missing or too short (>= 32 chars)');
+        }
+
+        $now = time();
+        $exp = $now + (15 * 60);
+
+        $payload = [
+            'iss'   => $iss,
+            'aud'   => $aud,
+            'iat'   => $now,
+            'exp'   => $exp,
+            'sub'   => (string) $user->id,
+            'uid'   => (int) $user->id,
+            'email' => $user->email,
+            'name'  => $user->name,
+        ];
+
+        return JWT::encode($payload, $secret, 'HS256');
     }
 }

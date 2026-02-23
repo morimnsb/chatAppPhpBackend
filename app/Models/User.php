@@ -5,68 +5,64 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\HasApiTokens;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
+    protected $table = 'User';
+
+    public $timestamps = true;
+    const CREATED_AT = 'createdAt';
+    const UPDATED_AT = 'updatedAt';
+
     protected $fillable = [
-        'first_name',
-        'last_name',
         'name',
         'email',
         'password',
-        'otp_code',
-        'otp_expires_at',
-        'email_verified_at',
+        'emailVerifiedAt',
+        'emailVerifyCode',
+        'emailVerifyExp',
     ];
 
     protected $hidden = [
         'password',
         'remember_token',
-        'otp_code',
+        'emailVerifyCode',
     ];
 
     protected $casts = [
-        'otp_expires_at'    => 'datetime',
-        'email_verified_at' => 'datetime',
+        'createdAt' => 'datetime',
+        'updatedAt' => 'datetime',
+        'emailVerifiedAt' => 'datetime',
+        'emailVerifyExp' => 'datetime',
     ];
-
-    // ✅ Advanced: use modern mutator + prevents double-hash safely
-    public function setPasswordAttribute($value): void
-    {
-        if (!is_string($value) || $value === '') return;
-
-        $this->attributes['password'] =
-            Hash::info($value)['algoName'] !== 'unknown'
-                ? $value
-                : Hash::make($value);
-    }
-
-    // ✅ Optional: always have name
-    public function getNameAttribute($value): string
-    {
-        if (is_string($value) && $value !== '') return $value;
-
-        $fn = (string) ($this->attributes['first_name'] ?? '');
-        $ln = (string) ($this->attributes['last_name'] ?? '');
-        $full = trim($fn.' '.$ln);
-
-        return $full !== '' ? $full : 'User#'.$this->id;
-    }
-
-    public function chatRooms(): BelongsToMany
-    {
-        return $this->belongsToMany(ChatRoom::class, 'chat_room_user')
-            ->withTimestamps();
-    }
 
     public function messages(): HasMany
     {
-        return $this->hasMany(Message::class);
+        return $this->hasMany(Message::class, 'userId');
+    }
+
+    public function memberships(): HasMany
+    {
+        return $this->hasMany(ChatRoomMember::class, 'userId');
+    }
+
+    public function refreshTokens(): HasMany
+    {
+        return $this->hasMany(RefreshToken::class, 'userId');
+    }
+
+    public function friendshipsSent(): HasMany
+    {
+        return $this->hasMany(Friendship::class, 'fromUserId');
+    }
+
+    public function friendshipsReceived(): HasMany
+    {
+        return $this->hasMany(Friendship::class, 'toUserId');
     }
 }

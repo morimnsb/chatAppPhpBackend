@@ -5,43 +5,41 @@ namespace App\Events;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Broadcasting\InteractsWithSockets; // ✅ add
+use Illuminate\Broadcasting\InteractsWithSockets;
 
 class TypingIndicator implements ShouldBroadcastNow
 {
-    use SerializesModels, InteractsWithSockets; // ✅ add
+    use SerializesModels, InteractsWithSockets;
 
-    public int $roomId;
-    public int $userId;
-    public bool $isTyping;
+    public function __construct(
+        public int $roomId,
+        public int $userId,
+        public bool $isTyping
+    ) {}
 
-    public function __construct(int $roomId, int $userId, bool $isTyping)
-    {
-        $this->roomId = $roomId;
-        $this->userId = $userId;
-        $this->isTyping = $isTyping;
-    }
-
-    public function broadcastOn()
+    public function broadcastOn(): PrivateChannel
     {
         return new PrivateChannel('chat.' . $this->roomId);
+        // یا:
+        // return new PrivateChannel('private-chat.' . $this->roomId);
     }
 
-    public function broadcastAs()
+    public function broadcastAs(): string
     {
-        return 'typing_indicator';
+        // ✅ Canonical event name across all backends
+        return 'chat.typing';
     }
 
-    public function broadcastWith()
+    public function broadcastWith(): array
     {
         return [
-            'type' => 'typing_indicator',
-            'room_id' => $this->roomId,
-            'roomId' => $this->roomId,
-            'user_id' => $this->userId,
-            'userId' => $this->userId,
-            'isTyping' => $this->isTyping,
-            'at' => now()->timestamp * 1000,
+            'type'     => 'typing',
+            'room_id'  => (int) $this->roomId,
+            'roomId'   => (int) $this->roomId,
+            'user_id'  => (int) $this->userId,
+            'userId'   => (int) $this->userId,
+            'isTyping' => (bool) $this->isTyping,
+            'at'       => now()->timestamp * 1000, // ms
         ];
     }
 }

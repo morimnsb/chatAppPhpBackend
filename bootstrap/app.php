@@ -14,8 +14,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        //
-    })
+    // ✅ register route middleware alias
+    $middleware->alias([
+        'node.jwt' => \App\Http\Middleware\NodeJwtAuth::class,
+    ]);
+})
+
     ->withExceptions(function (Exceptions $exceptions) {
         //
     })
