@@ -16,9 +16,9 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        Event::listen(
-            MessageReceived::class,
-            HandleWsMessageReceived::class,
-        );
+        // Event::listen(
+        //     MessageReceived::class,
+        //     HandleWsMessageReceived::class,
+        // );
     }
 }
