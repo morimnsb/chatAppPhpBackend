@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 namespace App\Events;
 
@@ -7,7 +7,7 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Broadcasting\InteractsWithSockets;
 
-class TypingIndicator implements ShouldBroadcastNow
+final class TypingIndicator implements ShouldBroadcastNow
 {
     use SerializesModels, InteractsWithSockets;
 
@@ -20,26 +20,34 @@ class TypingIndicator implements ShouldBroadcastNow
     public function broadcastOn(): PrivateChannel
     {
         return new PrivateChannel('chat.' . $this->roomId);
-        // یا:
-        // return new PrivateChannel('private-chat.' . $this->roomId);
     }
 
     public function broadcastAs(): string
     {
-        // ✅ Canonical event name across all backends
         return 'chat.typing';
     }
 
+    /**
+     * @return array{
+     *   type: 'typing',
+     *   room_id: int,
+     *   roomId: int,
+     *   user_id: int,
+     *   userId: int,
+     *   isTyping: bool,
+     *   at: int
+     * }
+     */
     public function broadcastWith(): array
-    {
-        return [
-            'type'     => 'typing',
-            'room_id'  => (int) $this->roomId,
-            'roomId'   => (int) $this->roomId,
-            'user_id'  => (int) $this->userId,
-            'userId'   => (int) $this->userId,
-            'isTyping' => (bool) $this->isTyping,
-            'at'       => now()->timestamp * 1000, // ms
-        ];
-    }
+{
+    return [
+        'type'     => 'typing',
+        'room_id'  => (int) $this->roomId,
+        'roomId'   => (int) $this->roomId,
+        'user_id'  => (int) $this->userId,
+        'userId'   => (int) $this->userId,
+        'isTyping' => (bool) $this->isTyping,
+        'at'       => ((int) now()->timestamp) * 1000, // ms (safe int)
+    ];
+}
 }

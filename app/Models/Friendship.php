@@ -1,36 +1,25 @@
-<?php
+<?php declare(strict_types=1);
 
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
-class Friendship extends Model
+/**
+ * @property int $id
+ * @property int $from_user_id
+ * @property int $to_user_id
+ * @property string $status
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ */
+final class Friendship extends Model
 {
-    protected $table = 'Friendship';
-
-    public $timestamps = true;
-    const CREATED_AT = 'createdAt';
-    const UPDATED_AT = 'updatedAt';
+    protected $table = 'friendships';
 
     protected $fillable = [
-        'fromUserId',
-        'toUserId',
+        'from_user_id',
+        'to_user_id',
         'status',
     ];
-
-    protected $casts = [
-        'createdAt' => 'datetime',
-        'updatedAt' => 'datetime',
-    ];
-
-    public function fromUser(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'fromUserId');
-    }
-
-    public function toUser(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'toUserId');
-    }
 }

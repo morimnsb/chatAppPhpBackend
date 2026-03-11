@@ -4,34 +4,41 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property int $id
+ * @property int $room_id
+ * @property int $user_id
+ * @property string|null $content
+ * @property string|null $kind
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ */
 class Message extends Model
 {
-    protected $table = 'Message';
-
-    public $timestamps = true;
-    const CREATED_AT = 'createdAt';
-    const UPDATED_AT = 'updatedAt';
+    protected $table = 'messages';
 
     protected $fillable = [
-        'roomId',
-        'userId',
+        'room_id',
+        'user_id',
         'content',
         'kind',
     ];
 
-    protected $casts = [
-        'createdAt' => 'datetime',
-        'updatedAt' => 'datetime',
-    ];
-
+    /**
+     * @return BelongsTo<ChatRoom, $this>
+     */
     public function room(): BelongsTo
     {
-        return $this->belongsTo(ChatRoom::class, 'roomId');
+        return $this->belongsTo(ChatRoom::class, 'room_id');
     }
 
+    /**
+     * @return BelongsTo<User, $this>
+     */
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'userId');
+        return $this->belongsTo(User::class, 'user_id');
     }
 }

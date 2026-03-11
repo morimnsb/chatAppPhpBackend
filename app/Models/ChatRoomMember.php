@@ -5,32 +5,35 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int $id
+ * @property int $room_id
+ * @property int $user_id
+ */
 class ChatRoomMember extends Model
 {
-    protected $table = 'ChatRoomMember';
+    protected $table = 'chat_room_members';
 
-    // Prisma only has createdAt, no updatedAt here
     public $timestamps = false;
-    const CREATED_AT = 'createdAt';
-    const UPDATED_AT = null;
 
     protected $fillable = [
-        'roomId',
-        'userId',
-        'createdAt',
+        'room_id',
+        'user_id',
     ];
 
-    protected $casts = [
-        'createdAt' => 'datetime',
-    ];
-
+    /**
+     * @return BelongsTo<ChatRoom, $this>
+     */
     public function room(): BelongsTo
     {
-        return $this->belongsTo(ChatRoom::class, 'roomId');
+        return $this->belongsTo(ChatRoom::class, 'room_id');
     }
 
+    /**
+     * @return BelongsTo<User, $this>
+     */
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'userId');
+        return $this->belongsTo(User::class, 'user_id');
     }
 }

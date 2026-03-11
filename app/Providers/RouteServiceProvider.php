@@ -17,7 +17,7 @@ class RouteServiceProvider extends ServiceProvider
         }
 
         RateLimiter::for('chat-actions', function (Request $request) {
-            $key = 'chat:' . ($request->user()?->id ?? $request->ip());
+            $key = 'chat:' . ($request->user()->id ?? $request->ip());
 
             return [
                 Limit::perMinute(10)->by($key),

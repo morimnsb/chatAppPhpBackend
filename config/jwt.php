@@ -25,7 +25,11 @@ return [
     |
     */
 
-    'secret' => env('JWT_SECRET'),
+        'secret' => env('JWT_SECRET'),
+
+    // ✅ custom claims for our app (used by AuthController::signAccessToken)
+    'issuer'   => env('JWT_ISSUER', 'laravel'),
+    'audience' => env('JWT_AUDIENCE', 'chatapp'),
 
     /*
     |--------------------------------------------------------------------------
