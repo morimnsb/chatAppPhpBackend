@@ -20,3 +20,5 @@ npm-debug.log*
 yarn-error.log*
 /_archive/
 /tools/reports/
+# PHPStan cache
+storage/phpstan
